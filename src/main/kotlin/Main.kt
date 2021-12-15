@@ -32,41 +32,55 @@ const val PRODUCT_TABLE = "PRODUCTS"
 const val PRODUCT_ID = "PRODUCT_ID"
 const val PRODUCT_NAME = "PRODUCT_NAME"
 const val PRODUCT_WEIGHT = "PRODUCT_WEIGHT"
+const val ORDER_TO_PRODUCT_TABLE = "ORDER_TO_PRODUCT"
+const val ORDER_TO_PRODUCT_ID = "ORDER_TO_PRODUCT_ID"
 var customerID = 0;
 var orderID = 0;
 var paymentID = 0;
 var deliveryID = 0;
+var orderToProductID = 0;
 var paymentAttempts = 1;
 var paymentSuccess = false
 
 fun main() {
 	openConnectionToDatabase()
-	deleteTables()
-	createTables()
-	addProducts()
-	var input: String
-	var amount = 0
-	val products = mutableListOf<String>()
-	println("Dear Customer, welcome in our sandwich shop")
+	var quit : String
 	do {
-		println("Please choose a sandwich from the following list")
-		products.add(askCustomerForOrder())
-		println("Do you want to order more Sandwiches? (=yes)")
-		input = readLine().toString()
-		amount++
-	} while (input == "yes")
-	val ids = askCustomerForData(products)
-	val actualPayment = handlePayment()
-	if (paymentSuccess) {
-		addPayment(actualPayment)
-		val orderID = addOrder(ids.customerId, actualPayment.id, ids.deliveryId)
-		connectOrderToProduct(products, orderID )
-	}
+		deleteTables()
+		createTables()
+		addProducts()
+		var input: String
+		var amount = 0
+		val products = mutableListOf<String>()
+		println("Dear Customer, welcome in our sandwich shop")
+		do {
+			println("Please choose a sandwich from the following list")
+			products.add(askCustomerForOrder())
+			println("Do you want to order more Sandwiches? (=yes)")
+			input = readLine().toString()
+			amount++
+		} while (input == "yes")
+		val ids = askCustomerForData(products)
+		val actualPayment = handlePayment()
+		if (paymentSuccess) {
+			addPayment(actualPayment)
+			val orderID = addOrder(ids.customerId, actualPayment.id, ids.deliveryId)
+			connectOrderToProduct(products, orderID )
+		}
+		print("Do you want to quit the program? (=yes) ")
+		quit = readLine().toString()
+	} while (quit != "yes")
+
 	closeConnectionToDatabase()
 }
 
 fun connectOrderToProduct(productIDs: List<String>, orderID: Int) {
-
+	productIDs.forEach { product ->
+		dbConnection!!.createStatement().use { statement ->
+			statement.execute(" INSERT INTO $ORDER_TO_PRODUCT_TABLE($ORDER_TO_PRODUCT_ID, $ORDER_ID, $PRODUCT_ID) VALUES($orderToProductID, $orderID, $product)")
+			orderToProductID++
+		}
+	}
 }
 
 fun addOrder(customerID: Int, paymentID: Int, deliveryID: Int) : Int {
@@ -141,6 +155,7 @@ fun checkPayment(paymentMethod: String, vararg details: String) {
 			}
 			"Credit Card" -> {
 				if (details[0].length > 16) {
+					println("wrong card number")
 					paymentSuccess = false
 					paymentAttempts++;
 					handlePayment()
@@ -149,11 +164,13 @@ fun checkPayment(paymentMethod: String, vararg details: String) {
 				val month = cal.get(Calendar.MONTH)
 				val year = cal.get(Calendar.YEAR)
 				if (details[1].substring(0,1).toInt() < month || details[1].substring(2,3).toInt() < year) {
+					println("card is already expired")
 					paymentSuccess = false
 					paymentAttempts++;
 					handlePayment()
 				}
 				if (details[2].length > 3) {
+					println("security code is not valid")
 					paymentSuccess = false
 					paymentAttempts++;
 					handlePayment()
@@ -307,6 +324,7 @@ fun closeConnectionToDatabase() {
 fun deleteTables() {
 	try {
 		dbConnection!!.createStatement().use { statement ->
+			statement.execute(("DROP TABLE $ORDER_TO_PRODUCT_TABLE"))
 			statement.execute("DROP TABLE $ORDER_TABLE")
 			statement.execute("DROP TABLE $CUSTOMER_TABLE")
 			statement.execute("DROP TABLE $PAYMENT_TABLE")
@@ -334,6 +352,7 @@ fun createTables() {
 				" CREATE TABLE $ORDER_TABLE ( $ORDER_ID INTEGER not NULL, $ORDER_ENUM VARCHAR(30), $CUSTOMER_ID INTEGER not NULL, $DELIVERY_ID INTEGER not NULL, $PAYMENT_ID INTEGER not NULL,  PRIMARY KEY ( $ORDER_ID ), FOREIGN KEY ( $CUSTOMER_ID ) REFERENCES $CUSTOMER_TABLE($CUSTOMER_ID), FOREIGN KEY ( $DELIVERY_ID) REFERENCES $DELIVERY_TABLE($DELIVERY_ID), FOREIGN KEY ( $PAYMENT_ID ) REFERENCES $PAYMENT_TABLE($PAYMENT_ID))"
 			)
 			statement.execute(" CREATE TABLE $PRODUCT_TABLE($PRODUCT_ID INTEGER not NULL, $PRODUCT_NAME VARCHAR(30), $PRODUCT_WEIGHT INTEGER, PRIMARY KEY ($PRODUCT_ID))")
+			statement.execute(" CREATE TABLE $ORDER_TO_PRODUCT_TABLE($ORDER_TO_PRODUCT_ID INTEGER not NULL, $ORDER_ID Integer not NULL, $PRODUCT_ID Integer not NULL, PRIMARY KEY ($ORDER_TO_PRODUCT_ID), FOREIGN KEY ($ORDER_ID) REFERENCES $ORDER_TABLE($ORDER_ID), FOREIGN KEY (PRODUCT_ID) REFERENCES $PRODUCT_TABLE($PRODUCT_ID))")
 		}
 	} catch (e: SQLException) {
 		e.printStackTrace()
